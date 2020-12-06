@@ -1,0 +1,237 @@
+#!/bin/bash
+
+out() { printf "$1 $2\n" "${@:3}"; }
+error() { out "==> ERROR:" "$@"; } >&2
+warning() { out "==> WARNING:" "$@"; } >&2
+msg() { out "==>" "$@"; }
+msg2() { out "  ->" "$@";}
+die() { error "$@"; exit 1; }
+
+if [ "$1" == "--help" ]; then
+cat <<EOF
+archbashstrap: install Arch Linux without pacman
+    Usage:
+    archbashstrap [directory]
+
+    Additional files:
+    ./arch_mirrorlist - file with your mirrors. If exists: will be used for current download mirror and copied to new root
+    ./arch_gnupg      - directory with your GPG keys for pacman. If exists: will be copied to new root
+
+    Additional variables:
+    MIRROR=repo://one.example.com - alternative to ./arch_mirrorlist
+    NOCHROOT=1                    - do not execute chroot command (useful for things like termux)
+
+Made by: Artemii Sudakov
+    https://github.com/BiteDasher
+EOF
+exit 0
+fi
+
+[ "$(id -u)" -ne 0 ] && die "This script must be run with root privileges"
+
+if [ ! "$@" ]; then
+  die "Installation folder not specified"
+fi
+case "$@" in
+  core.db|extra.db|core.tar|extra.tar|core_db|extra_db|download)
+  die "The name of the installation folder is invalid" ;;
+  *) true ;;
+esac
+
+arg_="$@"
+
+pacstrap() {
+warning "Following files and directories will be removed (if exists): %s\n    Hit Enter to continue; Ctrl+C to abort" "core.db extra.db core.tar extra.tar core_db extra_db"
+read
+[ -f ./core.db ] && rm ./core.db; [ -f ./extra.db ] && rm ./extra.db
+[ -d ./core_db ] && rm -r -f ./core_db; [ -d ./extra_db ] && rm -r -f ./extra_db
+#[ -d ./download ] && rm -r -f ./download
+[ -f ./core.tar ] && rm ./core.tar; [ -f ./extra.tar ] && rm ./extra.tar
+[ ! -f ./packages ] && die "packages file not found. Download it from github.com/BiteDasher/archbashstrap or do 'pactree -l -u base > packages' on Arch Linux host machine"
+if [[ ! "$MIRROR" ]]; then
+  if [[ ! -f ./arch_mirrorlist ]]; then
+  MIRROR="https://mirror.yandex.ru/archlinux"; else
+    if [ -s ./arch_mirrorlist ]; then warning "File arch_mirrorlist is empty, fallback to yandex mirror"; fi
+  MIRROR="$(cat ./arch_mirrolist | cut -d " " -f 3- | head -n 1)"
+  fi
+else
+  :
+fi
+msg "Downloading core.db & extra.db"
+curl -s -L -S $MIRROR/core/os/x86_64/core.db -o core.db || die "Error during getting core.db"
+curl -s -L -S $MIRROR/extra/os/x86_64/extra.db -o extra.db || die "Error during getting extra.db"
+msg2 "Unpacking (1/3)..."
+gzip -d -f < core.db > "core.tar" || die "Error during gzip -d for core.db"
+gzip -d -f < extra.db > "extra.tar" || die "Error during gzip -d for extra.db"
+msg2 "Unpacking (2/3)..."
+mkdir core_db || die "Error during creating directory 'core_db'"
+mkdir extra_db || die "Error during creating directory 'extra_db'"
+tar -x -f core.db -C core_db || die "Error during tar -x -f core.db"
+tar -x -f extra.db -C extra_db || die "Error during tar -x -f extra.db"
+msg2 "Unpacking (3/3)..."
+rm -r core.db core.tar extra.db extra.tar || die "Error during removing database files"
+msg "Done"
+msg "Varificating and parsing packages..."
+msg2 "Starts from base package"
+packages="$(cat packages | tr "\n" " ")"
+count="$(echo ${packages[@]} | wc -w)"
+count0=0
+for dep in ${packages[@]}; do
+  ((count0++))
+  echo -n -e "\r   [$count0/$count]..."
+  local name="$(ls -N -v -w 1 ./core_db | sed 's/-[0-9].*//' | sort -u | grep -x $dep)"
+  if [[ ! "$name" ]]; then
+    local name="$(ls -N -v -w 1 ./extra_db | sed 's/-[0-9].*//' | sort -u | grep -x $dep)"
+  fi
+  if [[ ! "$name" || "$name" != "$dep" ]]; then echo ""; die "Package "$dep" not found"; fi
+  local package0="$(ls -N -v -w 1 ./*_db | sed "/^$name-[0-9].*/! d")"
+  if [ -z "$package0" ]; then echo ""; die "Package with name "$dep" not found in the core and extra databases"; fi
+  if (( "$(echo "$package0" | wc -l)" > 1 )); then local package0="$(\
+  for try0 in $package0; do
+    if [ "$(cat ./core_db/"$try0"/desc 2>/dev/null | sed -n '/%NAME%/,/^ *$/p' | sed '$d;1d')" != $dep ]; then
+      if [ "$(cat ./extra_db/"$try0"/desc 2>/dev/null | sed -n '/%NAME%/,/^ *$/p' | sed '$d;1d')" != $dep ]; then
+        :
+      else
+        echo "$try0"
+      fi
+    else
+        echo "$try0"
+    fi
+  done)"
+  fi
+      for try in core_db extra_db; do
+        if [ ! -d ./"$try"/"$package0" ]; then continue; fi
+        if [ "$(cat ./"$try"/"$package0"/desc | sed -n '/%NAME%/,/^ *$/p' | sed '$d;1d')" != $dep ]; then echo ""; die "Package with name "$dep" not found"; else
+          case "$try" in core_db) local database=core ;; extra_db) local database=extra ;; esac
+        fi
+      done
+  local package="$(cat ${database}_db/"$package0"/desc | sed -n '/%FILENAME%/,/^ *$/p' | sed '$d;1d')"
+  parsed+=''$(echo ""$database" "$dep" "$package"\n")''
+done || die "Error while parsing packages"; echo ""
+msg "Downloading packages..."
+if [ ! -d ./download ]; then mkdir ./download || die "Error while creating directory 'download'"; fi
+count0=0
+while read -r dlpkg; do
+  ((count0++))
+  echo -n -e "\r   Downloading [$count0/$count]..."
+  if [ -f ./download/"$(echo $dlpkg | cut -d " " -f 3)" ]; then continue; fi
+  curl -s -S -L -o ./download/$(echo $dlpkg | cut -d " " -f 3) $MIRROR/$(echo $dlpkg | cut -d " " -f 1)/os/x86_64/$(echo $dlpkg | cut -d " " -f 3)
+done < <(echo -e "${parsed}" | sed '$d') || die "Error during downloading packages"; echo ""
+msg "Installing packages to "$folder"..."
+count0=0
+DIR="$PWD/download"
+tmp_dir="$(mktemp -d)"
+mkdir -m 755 -p "$folder"/var/lib/pacman/{local,sync} ######
+while read -r installpkg; do
+  cd $DIR
+  tar -x -f "$installpkg" -C "$tmp_dir" --force-local
+  cd $tmp_dir
+  ((count0++))
+  echo -n -e "\r   Installing [$count0/$count]..."
+  while read -r dest; do
+  if [ ! -L ".$dest" ] && [[ -d ".$dest" && ! -d "${folder}${dest}" ]]; then
+        mkdir -m $(stat -c '%a' ".$dest") -p "${folder}${dest}"
+  else
+        if [[ -f ".$dest" && ! -f "${folder}${dest}" ]] && [[ ! -L ".$dest" ]]; then
+            install -m $(stat -c '%a' ".$dest") ".$dest" "${folder}${dest}"
+        else
+              if [[ -L ".$dest" ]] && [[ ! -L "${folder}${dest}" ]]; then
+                    ln -s "$(readlink ".$dest")" "${folder}${dest}"
+              fi
+        fi
+  fi
+  done < <(find . -not -path "./.PKGINFO" -not -path "./.BUILDINFO" -not -path "./.INSTALL" -not -path "./.MTREE" | grep -E -o "/.*")
+  pkg_name="$(cat ./.PKGINFO | grep -o "^pkgname = .*" | cut -d " " -f 3)-$(cat ./.PKGINFO | grep -o "^pkgver = .*" | cut -d " " -f 3)"
+  mkdir -m 755 -p "$folder"/var/lib/pacman/local/"$pkg_name"
+  ####
+  echo "%NAME%" > "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  echo "$(cat ./.PKGINFO | grep -o "^pkgname = .*" | cut -d " " -f 3)" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  echo "" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  ####
+  do_stuff() {
+  echo "%${1}%" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  echo "$(cat ./.PKGINFO | grep -o "^${2} = .*" | cut -d " " -f 3${3})" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  echo "" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+}
+  for operation in "VERSION pkgver" "BASE pkgbase" "DESC pkgdesc -" "URL url" "ARCH arch" "BUILDDATE builddate" "PACKAGER packager" "SIZE size" "LICENSE license"; do
+  do_stuff $operation
+  done
+  ####
+  echo "%INSTALLDATE" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  echo "$(date "+%s")" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  echo "" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  ####
+  echo "%VALIDATION%" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  echo "none" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  echo "" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  ####
+  do_stuff2() {
+  if [ -n "$(cat ./.PKGINFO | grep -o "^${2} = .*")" ]; then
+  echo "%${1}%" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  echo "$(cat ./.PKGINFO | grep -o "^${2} = .*" | cut -d " " -f 3${3})" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  echo "" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
+  fi
+}
+  for operation in "DEPENDS depend" "REPLACES replaces" "OPTDEPENDS optdepend -" "CONFLICTS conflict" "PROVIDES provides"; do
+  do_stuff2 $operation
+  done
+  install -Dm 644 ./.MTREE "$folder"/var/lib/pacman/local/"$pkg_name"/mtree
+  [ -f ./.INSTALL ] && install -Dm 644 ./.INSTALL "$folder"/var/lib/pacman/local/"$pkg_name"/install
+  echo "%FILES%" > "$folder"/var/lib/pacman/local/"$pkg_name"/files
+  find . -not -path "./.PKGINFO" -not -path "./.BUILDINFO" -not -path "./.INSTALL" -not -path "./.MTREE" | cut -c 3- | sed '1d' >> "$folder"/var/lib/pacman/local/"$pkg_name"/files
+  rm -rf "$tmp_dir"/*
+done < <(echo -e "${parsed}" | cut -d " " -f 3 | sed '$d') || return 1
+    mkdir -m 755 -p "$folder"/etc/pacman.d
+    if [ ! -f "$PWD/../arch_mirrorlist" ]; then echo 'Server = '$MIRROR'/$repo/os/$arch' > "$folder"/etc/pacman.d/mirrorlist; fi
+    echo "9" > "$folder"/var/lib/pacman/local/ALPM_DB_VERSION
+      if [ "$NOCHROOT" != 1 ]; then
+    echo ""; msg "Updating ca-certificates, fixing config, signing keys..."
+    mount --bind /etc/resolv.conf "$folder"/etc/resolv.conf
+    mount --bind /proc "$folder"/proc
+    mount --bind /sys "$folder"/sys
+    mount --bind /dev "$folder"/dev
+    cat <<EOF > "$folder"/usr/local/bin/archfix
+    update-ca-trust /usr/share/ca-certificates/trust-source/*
+    sed 's/CheckSpace/#CheckSpace/' -i /etc/pacman.conf
+    pacman-key --init
+    pacman-key --populate archlinux
+EOF
+    chmod 755 "$folder"/usr/local/bin/archfix
+    chroot "$folder" "/usr/local/bin/archfix" || error "chroot command failed"
+    rm "$folder"/usr/local/bin/archfix
+    umount "$folder"/etc/resolv.conf
+    umount "$folder"/proc
+    umount "$folder"/sys
+    umount -l "$folder"/dev
+      fi
+    rm -rf "$PWD"/../{core_db,extra_db,download}
+    rm -rf "${tmp_dir}"
+    msg "DONE!"
+}
+
+folder="$(realpath "$arg_")"
+
+[ ! -d "$folder" ] && die "Installation folder doesn't exists"
+
+# create obligatory directories
+msg 'Creating install root at %s' "$folder"
+mkdir -m 0755 -p "$folder"/var/{cache/pacman/pkg,lib/pacman,log} "$folder"/{dev,run,etc/pacman.d}
+mkdir -m 1777 -p "$folder"/tmp
+mkdir -m 0555 -p "$folder"/{sys,proc}
+
+if [[ -d ./arch.gnupg ]]; then
+  # if there's a keyring on the host, copy it into the new root, unless it exists already
+    cp -a ./arch.gnupg "$folder/etc/pacman.d/gnupg"
+fi
+
+if ! pacstrap "$folder"; then
+  die 'Failed to install packages to new root'
+fi
+
+if [[ -f ./arch_mirrorlist ]]; then
+  # install the host's mirrorlist onto the new root
+  cp ./arch_mirrorlist "$folder/etc/pacman.d/mirrorlist"
+  chmod 644 "$folder"/etc/pacman.d/mirrorlist
+fi
+
+# vim: et ts=2 sw=2 ft=sh:
