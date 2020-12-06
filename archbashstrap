@@ -191,10 +191,11 @@ done < <(echo -e "${parsed}" | cut -d " " -f 3 | sed '$d') || return 1
     mount --bind /sys "$folder"/sys
     mount --bind /dev "$folder"/dev
     cat <<EOF > "$folder"/usr/local/bin/archfix
-    update-ca-trust /usr/share/ca-certificates/trust-source/*
-    sed 's/CheckSpace/#CheckSpace/' -i /etc/pacman.conf
-    pacman-key --init
-    pacman-key --populate archlinux
+#!/bin/bash
+update-ca-trust /usr/share/ca-certificates/trust-source/*
+sed 's/CheckSpace/#CheckSpace/' -i /etc/pacman.conf
+pacman-key --init &>/dev/null
+pacman-key --populate archlinux &>/dev/null
 EOF
     chmod 755 "$folder"/usr/local/bin/archfix
     chroot "$folder" "/usr/local/bin/archfix" || error "chroot command failed"
