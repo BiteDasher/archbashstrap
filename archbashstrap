@@ -178,7 +178,17 @@ while read -r installpkg; do
   install -Dm 644 ./.MTREE "$folder"/var/lib/pacman/local/"$pkg_name"/mtree
   [ -f ./.INSTALL ] && install -Dm 644 ./.INSTALL "$folder"/var/lib/pacman/local/"$pkg_name"/install
   echo "%FILES%" > "$folder"/var/lib/pacman/local/"$pkg_name"/files
-  find . -not -path "./.PKGINFO" -not -path "./.BUILDINFO" -not -path "./.INSTALL" -not -path "./.MTREE" | cut -c 3- | sed '1d' >> "$folder"/var/lib/pacman/local/"$pkg_name"/files
+  find . -not -path "./.PKGINFO" -not -path "./.BUILDINFO" -not -path "./.INSTALL" -not -path "./.MTREE" | cut -c 3- | sed '1d' >> "$folder"/var/lib/pacman/local/"$pkg_name"/files; echo "" >> "$folder"/var/lib/pacman/local/"$pkg_name"/files
+  ####
+  if [ -n "$(cat ./.PKGINFO | grep -o "^backup = .*")" ]; then
+  echo "%BACKUP%" >> "$folder"/var/lib/pacman/local/"$pkg_name"/files
+  while read -r backupfile; do
+  md5sum="$(md5sum ./"$backupfile" | cut -d " " -f 1)"
+  echo ""$backupfile"	"$md5sum"" >> "$folder"/var/lib/pacman/local/"$pkg_name"/files
+  done < <(cat ./.PKGINFO | grep -o "^backup = .*" | cut -d " " -f 3-)
+  echo "" >> "$folder"/var/lib/pacman/local/"$pkg_name"/files
+  fi
+  ####
   rm -rf "$tmp_dir"/*
 done < <(echo -e "${parsed}" | cut -d " " -f 3 | sed '$d') || return 1
     mkdir -m 755 -p "$folder"/etc/pacman.d
@@ -235,4 +245,3 @@ if [[ -f ./arch_mirrorlist ]]; then
   chmod 644 "$folder"/etc/pacman.d/mirrorlist
 fi
 
-# vim: et ts=2 sw=2 ft=sh:
