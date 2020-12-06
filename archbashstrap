@@ -230,9 +230,9 @@ mkdir -m 0755 -p "$folder"/var/{cache/pacman/pkg,lib/pacman,log} "$folder"/{dev,
 mkdir -m 1777 -p "$folder"/tmp
 mkdir -m 0555 -p "$folder"/{sys,proc}
 
-if [[ -d ./arch.gnupg ]]; then
+if [[ -d ./arch_gnupg ]]; then
   # if there's a keyring on the host, copy it into the new root, unless it exists already
-    cp -a ./arch.gnupg "$folder/etc/pacman.d/gnupg"
+    cp -a ./arch_gnupg "$folder/etc/pacman.d/gnupg"
 fi
 
 if ! pacstrap "$folder"; then
