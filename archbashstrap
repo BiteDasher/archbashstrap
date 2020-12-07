@@ -27,7 +27,7 @@ EOF
 exit 0
 fi
 
-[ "$(id -u)" -ne 0 ] && die "This script must be run with root privileges"
+[ "$NOCHROOT" != 1 ] && [ "$(id -u)" -ne 0 ] && die "This script must be run with root privileges"
 
 if [ ! "$@" ]; then
   die "Installation folder not specified"
