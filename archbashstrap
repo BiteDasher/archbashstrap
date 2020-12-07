@@ -153,7 +153,7 @@ while read -r installpkg; do
   echo "$(cat ./.PKGINFO | grep -o "^${2} = .*" | cut -d " " -f 3${3})" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
   echo "" >> "$folder"/var/lib/pacman/local/"$pkg_name"/desc
 }
-  for operation in "VERSION pkgver" "BASE pkgbase" "DESC pkgdesc -" "URL url" "ARCH arch" "BUILDDATE builddate" "PACKAGER packager" "SIZE size" "LICENSE license"; do
+  for operation in "VERSION pkgver" "BASE pkgbase" "DESC pkgdesc -" "URL url" "ARCH arch" "BUILDDATE builddate" "PACKAGER packager -" "SIZE size" "LICENSE license"; do
   do_stuff $operation
   done
   ####
