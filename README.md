@@ -9,7 +9,7 @@ Execute the script with the NOCHROOT=1 option if you do not have `root access` o
 `archbashstrap --help`
 
 ## How-to generate `packages` file:
-You can grab `packages` file from this repository (only base group), or create your own. To create file `packages` with all the required packages for the `base` group, make sure you have installed the `pacman-contib` package, run following command on Arch Linux machine and then copy `packages` to your local pc
+You can grab `packages` file from this repository (only base group), or create your own. To create file `packages` with all the required packages for the `base` group, make sure you have installed the `pacman-contrib` package, run following command on Arch Linux machine and then copy `packages` to your local pc
 ```
 pactree -l -u -s base > packages
 ```
