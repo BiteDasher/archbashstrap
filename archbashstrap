@@ -65,6 +65,7 @@ pacstrap() {
   else
     :
   fi
+  _curdir="$(pwd)"
   msg "Downloading core.db & extra.db"
   curl -s -L -S $MIRROR/core/os/x86_64/core.db -o core.db || die "Error during getting core.db"
   curl -s -L -S $MIRROR/extra/os/x86_64/extra.db -o extra.db || die "Error during getting extra.db"
@@ -214,7 +215,7 @@ pacstrap() {
     rm -rf "$tmp_dir"/*
   done < <(echo -e "${parsed}" | cut -d " " -f 3 | sed '$d') || return 1
   mkdir -m 755 -p "$folder"/etc/pacman.d
-  if [ ! -f "$PWD/../arch_mirrorlist" ]; then echo 'Server = '$MIRROR'/$repo/os/$arch' >"$folder"/etc/pacman.d/mirrorlist; fi
+  if [ ! -f "$_curdir/arch_mirrorlist" ]; then echo 'Server = '$MIRROR'/$repo/os/$arch' >"$folder"/etc/pacman.d/mirrorlist; fi
   echo "9" >"$folder"/var/lib/pacman/local/ALPM_DB_VERSION
   if [ "$NOCHROOT" != 1 ]; then
     echo ""
@@ -238,7 +239,7 @@ EOF
     umount "$folder"/sys
     umount -l "$folder"/dev
   fi
-  rm -rf "$PWD"/../{core_db,extra_db,download}
+  rm -rf "$_curdir"/{core_db,extra_db,download}
   rm -rf "${tmp_dir}"
   msg "DONE!"
 }
@@ -253,17 +254,17 @@ mkdir -m 0755 -p "$folder"/var/{cache/pacman/pkg,lib/pacman,log} "$folder"/{dev,
 mkdir -m 1777 -p "$folder"/tmp
 mkdir -m 0555 -p "$folder"/{sys,proc}
 
-if [[ -d ./arch_gnupg ]]; then
+if [[ -d "$_curdir"/arch_gnupg ]]; then
   # if there's a keyring on the host, copy it into the new root, unless it exists already
-  cp -a ./arch_gnupg "$folder/etc/pacman.d/gnupg"
+  cp -a "$_curdir"/arch_gnupg "$folder/etc/pacman.d/gnupg"
 fi
 
 if ! pacstrap "$folder"; then
   die 'Failed to install packages to new root'
 fi
 
-if [[ -f ./arch_mirrorlist ]]; then
+if [[ -f "$_curdir"/arch_mirrorlist ]]; then
   # install the host's mirrorlist onto the new root
-  cp ./arch_mirrorlist "$folder/etc/pacman.d/mirrorlist"
+  cp "$_curdir"/arch_mirrorlist "$folder/etc/pacman.d/mirrorlist"
   chmod 644 "$folder"/etc/pacman.d/mirrorlist
 fi
