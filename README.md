@@ -13,6 +13,8 @@ You can grab `packages` file from this repository (only base group), or create y
 ```
 pactree -l -u -s base > packages
 ```
+If you installed this package from the `AUR`, you can take the `packages` file from the file `/usr/share/archbashstrap/packages`
+
 At the moment, you can create a file only with the "base" group, using the `core` and `extra` repositories, since the rest are difficult to parse and provide a package selection dialog. Anyway, you can install other packages after bootstrap.
 
 ## Dependencies:
