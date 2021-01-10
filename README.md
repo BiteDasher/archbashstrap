@@ -21,4 +21,6 @@ At the moment, you can create a file only with the "base" group, using the `core
 `sed` \
 `coreutils` \
 `curl` \
-`tar`
+`tar` \
+`zstd` (because of new packages compression method) \
+`xz`
