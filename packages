@@ -40,13 +40,15 @@ procps-ng
 systemd-libs
 libgcrypt
 libgpg-error
+libp11-kit
+libtasn1
+libffi
 lz4
 zstd
 sed
 tar
 gettext
 glib2
-libffi
 libunistring
 libcroco
 libxml2
@@ -59,6 +61,7 @@ shadow
 util-linux
 gzip
 less
+pcre2
 licenses
 pacman
 libarchive
@@ -68,8 +71,6 @@ ca-certificates
 ca-certificates-mozilla
 ca-certificates-utils
 p11-kit
-libp11-kit
-libtasn1
 libssh2
 libpsl
 libidn2
@@ -102,7 +103,6 @@ libnfnetlink
 libnetfilter_conntrack
 kbd
 libelf
-pcre2
 systemd-sysvcompat
 iputils
 iproute2
