@@ -60,7 +60,7 @@ pacstrap() {
       MIRROR="https://mirror.yandex.ru/archlinux"
     else
       if [ -s ./arch_mirrorlist ]; then warning "File arch_mirrorlist is empty, fallback to yandex mirror"; fi
-      MIRROR="$(cat ./arch_mirrolist | cut -d " " -f 3- | head -n 1)"
+      MIRROR="$(cat ./arch_mirrorlist | cut -d " " -f 3- | head -n 1)"
     fi
   else
     :
